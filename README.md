@@ -6,9 +6,9 @@ An updated version of BIASD capable of running global analyses across multiple d
 
 ## Original Manuscript
 Increasing the time resolution of single-molecule experiments with Bayesian inference.
-Colin D Kinz-Thompson, Ruben L Gonzalez Jr.,
-bioRxiv 099648; doi: https://doi.org/10.1101/099648
-https://www.biorxiv.org/content/early/2017/05/26/099648
+Colin D Kinz-Thompson, Ruben L Gonzalez Jr., 
+*Biophys. J.* **114**, 289-300 (2018); doi: https://doi.org/10.1016/j.bpj.2017.11.3741
+https://www.sciencedirect.com/science/article/pii/S0006349517349731
 
 ## Updates
 * Updated to Python 3.
