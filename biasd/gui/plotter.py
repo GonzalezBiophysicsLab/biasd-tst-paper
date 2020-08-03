@@ -67,7 +67,7 @@ class trace_plotter(FigureCanvas):
 		colors = ['purple', 'yellow', 'green', 'cyan', 'orange']
 		xlabels = ['Signal', 'Signal', 'Signal Noise', r'Rate Constant (s$^{-1}$)', r'Rate Constant (s$^{-1}$)']
 
-		dist_dict = dict(zip(range(5),[pc.e1,pc.e2,pc.sigma,pc.k1,pc.k2]))
+		dist_dict = dict(list(zip(list(range(5)),[pc.e1,pc.e2,pc.sigma,pc.k1,pc.k2])))
 		dist = dist_dict[dist_index]
 		if not dist.okay:
 			self.clear_plot()

@@ -15,7 +15,7 @@ import sys
 
 import biasd as b
 
-from smd_loader import ui_loader
+from .smd_loader import ui_loader
 
 class laplace(QWidget):
 	def __init__(self,parent):
@@ -86,9 +86,9 @@ class laplace(QWidget):
 		try:
 			fn = self.get_smd_filename()
 			f = b.smd.load(fn)
-			if f[self.tloc+'/data'].keys().count('Time') > 0:
+			if list(f[self.tloc+'/data'].keys()).count('Time') > 0:
 				t = f[self.tloc+'/data/Time'].value
-			elif f[self.tloc+'/data'].keys().count('time') > 0:
+			elif list(f[self.tloc+'/data'].keys()).count('time') > 0:
 				t = f[self.tloc+'/data/time'].value
 			self.tau = t[1] - t[0]
 			f.close()
@@ -143,7 +143,7 @@ class laplace(QWidget):
 		if reply == QMessageBox.Yes:
 			fn = self.get_smd_filename()
 			f = b.smd.load(fn)
-			tlist = [i for i in f.keys() if i.startswith('trajectory')]
+			tlist = [i for i in list(f.keys()) if i.startswith('trajectory')]
 			f.close()
 			self.totaltraj = len(tlist)
 			t0 = time.time()

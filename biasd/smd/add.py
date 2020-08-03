@@ -101,7 +101,7 @@ def trajectories(f,x,y,x_label='Time',y_label='Signal'):
 	'''
 
 	# Check to see how many trajectories already exist
-	if not f.attrs.keys().count('number of trajectories'):
+	if not list(f.attrs.keys()).count('number of trajectories'):
 		f.attrs['number of trajectories'] = 0
 	nstart = f.attrs['number of trajectories']
 
@@ -127,4 +127,4 @@ def trajectories(f,x,y,x_label='Time',y_label='Signal'):
 		dset = g.create_dataset(y_label,data = y[i-nstart])
 		_addhash(dset)
 
-	f.attrs['number of trajectories'] = len(f.keys())
+	f.attrs['number of trajectories'] = len(list(f.keys()))

@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import QApplication, QColumnView, QWidget, QVBoxLayout, QHB
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 from PyQt5.QtCore import Qt, pyqtSignal, QObject, QItemSelection
 
-from plotter import trace_plotter
+from .plotter import trace_plotter
 
 class selectChangeSignal(QObject):
 	signal = pyqtSignal(QItemSelection,QItemSelection)
@@ -153,7 +153,7 @@ class smd_load(QWidget):
 			location = ''.join([pp+'/' for pp in path[1:]])[:-1]
 			
 			if print_it:
-				print "'" + location + "'"
+				print("'" + location + "'")
 			else:
 				return location
 	
@@ -164,7 +164,7 @@ class smd_load(QWidget):
 	
 	def new_model(self,filename):
 		def add_group(group,si):
-			attrs = group.attrs.items()
+			attrs = list(group.attrs.items())
 			attr_si = QStandardItem('attrs')
 			attr_si.setEditable(False)
 			for i in range(len(attrs)):
@@ -176,7 +176,7 @@ class smd_load(QWidget):
 				attr_si.setChild(i,attr_child)
 			si.setChild(0,attr_si)
 	
-			groups  = group.items()
+			groups  = list(group.items())
 			# Add 1 b/c attributes is 0
 			for i in range(len(groups)):
 				gname = groups[i][0]
@@ -196,7 +196,7 @@ class smd_load(QWidget):
 						newthing.setChild(0,val)
 						si.setChild(i+1,newthing)
 					except:
-						print groups[i][0]
+						print(groups[i][0])
 			
 		self.model = QStandardItemModel(self.viewer)
 		try:

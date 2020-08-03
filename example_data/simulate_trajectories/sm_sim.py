@@ -116,30 +116,33 @@ def simulate(rates,emissions,noise,nframes,dt):
 	signal[1] += np.random.normal(size=signal.shape[1])*noise
 	return trajectory,signal
 
-def test():
+def test(noise):
 	'''
 	Tries to simulate a trajectory and make a plot
 	'''
 
 	import matplotlib.pyplot as plt
 
-	rates = np.array(([0,10.,2.],[2.,0,2.],[1.5,2.,0]))
-	emissions = np.array((0.,1.,2.))
-	noise = 0.05 # SNR = 20
-	nframes = 1000000
+	rates = np.array(([0,0.176],[0.115,0.]))
+	emissions = np.array((0.36,0.58))
+	noise = noise # SNR = 20
+	nframes = 500
 	dt = .1 # 500 msec
 
 	trajectory,signal = simulate(rates,emissions,noise,nframes,dt)
+	'''
 	q = rates.copy()
 	p = np.zeros(q.shape[0])
 	for i in range(q.shape[0]):
 		q[i,i] = -q[i].sum()
 		p[i] = (trajectory[1][trajectory[0] == i]).sum()
 	p /= p.sum()
-
+	
 	print 'Steady State:',steady_state(q)
 	print 'Simulation  :',p
-
+	'''
+	return signal
+	'''
 	stop = 1000
 	plt.plot(signal[0,:stop],signal[1,:stop],lw=1)
 	plt.xlim(0,signal[0,stop])
@@ -147,3 +150,4 @@ def test():
 	plt.ylabel('Signal',fontsize=12)
 	plt.title('Blurred SSA Trajectory',fontsize=16)
 	plt.show()
+	'''

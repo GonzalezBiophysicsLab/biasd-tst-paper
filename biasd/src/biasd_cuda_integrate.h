@@ -12,6 +12,4 @@ __device__ double integrand(double f, double d, theta *t);
 __device__ void qg10k21(double a, double b, double *out, double d, theta * t);
 __device__ void adaptive_integrate(double a0, double b0, double *out, double epsilon, double d, theta *t);
 
-void get_cuda_errors();
-
 #endif

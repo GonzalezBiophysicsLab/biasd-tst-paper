@@ -14,15 +14,15 @@ import sys
 
 import biasd as b
 
-from smd_loader import ui_loader
-from plotter import trace_plotter
+from .smd_loader import ui_loader
+from .plotter import trace_plotter
 
 
 class previewer(QWidget):
 	def __init__(self,parent=None,dists = None):
 		super(QWidget,self).__init__(parent)
 		self.dists = dists
-		self.dist_names = [u'ϵ_1',u'ϵ_2',u'  σ',u'k_1',u'k_2']
+		self.dist_names = ['ϵ_1','ϵ_2','  σ','k_1','k_2']
 		
 		if not dists is None:
 			self.initialize()
@@ -155,7 +155,7 @@ class distribution(QWidget):
 class priors(QWidget):
 	def __init__(self,parent):
 		super(QWidget,self).__init__(parent=parent)
-		self.priors_dists = [u'ϵ_1',u'ϵ_2',u'  σ',u'k_1',u'k_2']
+		self.priors_dists = ['ϵ_1','ϵ_2','  σ','k_1','k_2']
 		self.initialize()
 
 	def initialize(self):
@@ -207,7 +207,7 @@ class priors(QWidget):
 	def update_dists(self):
 		try:
 			p = self.parent().parent().priors
-			for i,pp in zip(range(5),[p.e1,p.e2,p.sigma,p.k1,p.k2]):
+			for i,pp in zip(list(range(5)),[p.e1,p.e2,p.sigma,p.k1,p.k2]):
 				cb = self.dists[i].prior_type
 				cb.setCurrentIndex(cb.findText(pp.name))
 				self.dists[i].param1.setText(str(pp.parameters[0]))
@@ -311,7 +311,7 @@ class priors(QWidget):
 				logstring = "Set Priors" + ''.join(["\n "+nn+" - "+ str(pp) for nn,pp in zip(n,p)])
 				self.parent().parent().log.new(logstring)
 			except:
-				print 'set nothing'
+				print('set nothing')
 		
 	def keyPressEvent(self,event):
 		if event.key() == Qt.Key_Escape:

@@ -47,13 +47,6 @@ __constant__ static double xgk[11] = {
 // ##########################################################
 // ##########################################################
 
-void get_cuda_errors(){
-	cudaError_t err = cudaGetLastError();
-	if (err != cudaSuccess) {
-			printf("CUDA Error : %s\n", cudaGetErrorString(err));
-	}
-}
-
 __device__ double integrand(double f, double d, theta *t) {
 	double y = 2.*(*t).tau*sqrt((*t).k1*(*t).k2*f*(1.-f));
 	double var = (*t).sig1 * (*t).sig1 * f + (*t).sig2 * (*t).sig2 * (1.-f);

@@ -532,7 +532,7 @@ def convert_distribution(this,to_this_type_string):
 		plt.show()
 	"""
 	
-	to_this_type = dict(zip(('beta','gamma','normal','uniform'),(beta,gamma,normal,uniform)))[to_this_type_string]
+	to_this_type = dict(list(zip(('beta','gamma','normal','uniform'),(beta,gamma,normal,uniform))))[to_this_type_string]
 	
 	params = to_this_type._moment2param_fxn(this.mean(), this.variance()+this.mean()**2.)
 	
@@ -685,8 +685,8 @@ class viewer(object):
 			self.k1 = self.mpl_button("k1",r"$k_1$",0.6,0.9,self)
 			self.k2 = self.mpl_button("k2",r"$k_2$",0.8,0.9,self)
 			
-			self.colors = dict(zip(['e1','e2','sigma','k1','k2'], 				['purple','yellow','green','cyan','orange']))
-			self.xlabels = dict(zip(['e1','e2','sigma','k1','k2'], 				['Signal','Signal','Signal Noise',r'Rate Constant (s$^{-1}$)',r'Rate Constant (s$^{-1}$)']))
+			self.colors = dict(list(zip(['e1','e2','sigma','k1','k2'], 				['purple','yellow','green','cyan','orange'])))
+			self.xlabels = dict(list(zip(['e1','e2','sigma','k1','k2'], 				['Signal','Signal','Signal Noise',r'Rate Constant (s$^{-1}$)',r'Rate Constant (s$^{-1}$)'])))
 			
 			self.ax = viewer.plt.axes([.1,.1,.8,.7])
 			self.ax.set_yticks((),())

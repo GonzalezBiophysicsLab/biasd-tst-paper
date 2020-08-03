@@ -15,4 +15,4 @@ void qg10k21(double a, double b, double *out, ip * p);
 void log_likelihood(int N, double * d, double ep1, double ep2, double sigma1, double sigma2, double k1, double k2, double tau, double epsilon, double * out);
 double sum_log_likelihood(int N, double *d, double ep1, double ep2, double sigma1, double sigma2, double k1, double k2, double tau, double epsilon);
 
-#endif 
+#endif

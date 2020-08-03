@@ -3,3 +3,7 @@
 *.png
 *.pdf
 *.smd
+*.dat
+*.out
+*.err
+*biasd.py

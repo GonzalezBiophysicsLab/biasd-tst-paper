@@ -13,8 +13,8 @@ import sys
 
 import biasd as b
 
-from smd_loader import smd_load
-from plotter import trace_plotter
+from .smd_loader import smd_load
+from .plotter import trace_plotter
 
 class ui_set_tau(QMainWindow):
 	def __init__(self,parent=None):
@@ -30,7 +30,7 @@ class ui_set_tau(QMainWindow):
 		qw = QWidget()
 		hbox = QHBoxLayout()
 		
-		ltau = QLabel(u"τ (s):")
+		ltau = QLabel("τ (s):")
 		
 		self.le_tau = QLineEdit()
 		self.le_tau.setValidator(QDoubleValidator(1e-300,1e300,100))
@@ -115,7 +115,7 @@ class traces(QWidget):
 		qwtemp.setLayout(hbox2)
 		vbox.addWidget(qwtemp)
 		
-		bset_tau = QPushButton(u'&Set τ')
+		bset_tau = QPushButton('&Set τ')
 		bset_tau.clicked.connect(self.launch_set_tau)
 		vbox.addWidget(bset_tau)
 		
@@ -216,7 +216,7 @@ class traces(QWidget):
 			f = b.smd.load(fname)
 			# check if this is maybe the same
 			doit = True
-			if f.attrs.keys().count('number of trajectories'):
+			if list(f.attrs.keys()).count('number of trajectories'):
 				nn = f.attrs['number of trajectories']
 				if nn == d.shape[0]:
 					really = QMessageBox.question(self,'Are you sure?', 'It looks like %s already contains %d trajectories. Are you sure you want to *APPEND* these new trajectories? You will have %d trajectories then.'%(fname, nn, 2*nn))

@@ -44,4 +44,4 @@ try:
 	from ..gui.smd_loader import launch as viewer
 	from .matlab_to_hdf5 import convert as convert_matlab
 except:
-	print "SMD failed to load - Make sure h5py is installed"
+	print("SMD failed to load - Make sure h5py is installed")

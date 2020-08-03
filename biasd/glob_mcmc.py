@@ -8,7 +8,7 @@ import numpy as _np
 import emcee
 from time import time as _time
 
-def setup(data, priors, tau, nwalkers, initialize='rvs', threads=1,device=0):
+def setup(data, T, priors, E_priors, tau, nwalkers, initialize='rvs', threads=1,device=0):
 	"""
 	Prepare the MCMC sampler
 
@@ -27,26 +27,46 @@ def setup(data, priors, tau, nwalkers, initialize='rvs', threads=1,device=0):
 		* An `emcee` sampler object. Please see the `emcee` documentation for more information.
 	"""
 
-	from biasd.likelihood import log_posterior
-	ndim = 5
+	#from biasd.likelihood import log_global_posterior, load_cuda_glob
+	import biasd.likelihood as bl
 
-	if isinstance(initialize,_np.ndarray) and initialize.shape == (nwalkers,5):
+	ndim = 7
+	u = [0,1,2]
+
+	if isinstance(initialize,_np.ndarray) and initialize.shape == (nwalkers,7):
 		initial_positions = initialize
+	
 	elif initialize == 'rvs':
-		initial_positions = priors.rvs(nwalkers).T
+
+		H1 = E_priors[0].rvs(nwalkers).flatten()
+		S1 = (H1 - 71400.)/300.
+		H2 = E_priors[2].rvs(nwalkers).flatten()
+		S2 = (H2 - 71400.)/300.
+		
+		initial_positions = _np.array([_np.concatenate((priors.rvs(1).flatten()[u], _np.array([H1[i], S1[i], H2[i], S2[i]]))) for i in range(nwalkers)])
 	elif initialize == 'mean':
-		initial_positions = _np.array([priors.mean()+1e-6*_np.random.rand(5) for _ in range(nwalkers)])
+		
+		H1 = E_priors[0].mean()
+		S1 = (H1 - 71400.)/300.
+		H2 = E_priors[2].mean()
+		S2 = (H2 - 71400.)/300.
+
+		initial_positions = _np.array([_np.concatenate((_np.array([p.mean() for p in priors]).flatten()[u], _np.array([H1,S1,H2,S2])), axis = 0) for _ in range(nwalkers)])
+
 	else:
 		raise AttributeError('Could not initialize the walkers. Try calling with initialize=\'rvs\'')
 
-	# Slap-dash hackery
+	# Slap-dash hackery to make sure the first E_fret is the lower one
 	for i in range(initial_positions.shape[0]):
 		if initial_positions[i,0] > initial_positions[i,1]:
 			temp = initial_positions[i,0]
 			initial_positions[i,0] = initial_positions[i,1]
 			initial_positions[i,1] = temp
 
-	sampler = emcee.EnsembleSampler(nwalkers, ndim, log_posterior, args=[data,priors,tau,device],threads=threads)
+	if bl.ll_version == "CUDA (Global)":
+		bl.load_cuda_glob(data)
+
+	sampler = emcee.EnsembleSampler(nwalkers, ndim, bl.log_global_posterior, args=[data,T,priors,E_priors,tau,device],threads=threads)
 
 	return sampler,initial_positions
 
@@ -124,13 +144,14 @@ def get_samples(sampler,nwalkers,uncorrelated=True,culled=False):
 		* `culled` is a boolean, where any sample with a log-probability less than 0 is removed. This is necessary because sometimes a few chains get very stuck, and their samples (not being representative of the posterior) mess up subsequent plots.
 
 	Returns:
-		An (N,5) `np.ndarray` of samples from the sampler
+		An (N,7) `np.ndarray` of samples from the sampler
 	"""
+
 	index = _np.argmax(nwalkers == _np.array(sampler.lnprobability.T.shape))
 	#index corresponds to nsteps. lnprobability is a 2-D array of nsteps and nwalkers.
 	#The dimension which corresponds to nwalkers in the transpose corresponds to nsteps
 	#(i.e. not walkers) in the original. Hey, it works!
-	
+
 	if uncorrelated:
 		maxauto = chain_statistics(sampler,verbose=False)
 	else:
@@ -139,7 +160,7 @@ def get_samples(sampler,nwalkers,uncorrelated=True,culled=False):
 		cut = sampler.lnprobability.mean(index) < 0.
 	else:
 		cut = sampler.lnprobability.mean(index) < -_np.inf
-	samples = sampler.chain[~cut,::maxauto,:].reshape((-1,5))
+	samples = sampler.chain[~cut,::maxauto,:].reshape((-1,7))
 	return samples
 
 def plot_corner(samples):
@@ -147,13 +168,13 @@ def plot_corner(samples):
 	Use the python package called corner <https://github.com/dfm/corner.py> to make some very nice corner plots (joints and marginalized) of posterior in the 5-dimensions used by the two-state BIASD posterior.
 
 	Input:
-		* `samples` is a (N,5) `np.ndarray`
+		* `samples` is a (N,7) `np.ndarray`
 	Returns:
 		* `fig` which is the handle to the figure containing the corner plot
 	"""
 
 	import corner
-	labels = [r'$\epsilon_1$', r'$\epsilon_2$', r'$\sigma$', r'$k_1$', r'$k_2$']
+	labels = [r'$\epsilon_1$', r'$\epsilon_2$', r'$\sigma_1$', r'$k_1$', r'$k_2$', r'$\varepsilon_1$', r'$\varepsilon_2$', r'$\sigma_1$', r'$kp_1$', r'$kp_2$',r'$q$']
 	fig = corner.corner(samples, labels=labels, quantiles=[.025,.50,.975],levels=(1-_np.exp(-0.5),))
 	return fig
 

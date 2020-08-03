@@ -17,13 +17,13 @@ sys.path.append(biasd_path)
 import biasd as b
 
 # Other UIs 
-from priors2 import ui_priors
-from smd_loader import ui_loader
-from preferences import ui_preferences
-from traces import ui_traces, ui_set_tau
-from laplace import ui_laplace
-from mcmc import ui_mcmc
-from posterior import ui_posterior
+from .priors2 import ui_priors
+from .smd_loader import ui_loader
+from .preferences import ui_preferences
+from .traces import ui_traces, ui_set_tau
+from .laplace import ui_laplace
+from .mcmc import ui_mcmc
+from .posterior import ui_posterior
 
 __version__ = "0.1.1"
 
@@ -277,7 +277,7 @@ class biasd_control(QWidget):
 	
 	def test(self):
 		# self.ui_priors.ui.update_dists()
-		print self.log.format()
+		print(self.log.format())
 		# print self.prefs.n_threads,self.prefs.eps,self.prefs.speed_n,self.prefs.speed_d,self.prefs.default.speed_d
 	
 	def launch_priors(self):

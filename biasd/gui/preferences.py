@@ -54,7 +54,7 @@ class prefs(QWidget):
 		# Options
 		frame_options = QGroupBox('Options')
 		grid2 = QGridLayout()
-		leps = QLabel(u"Numerical Integration Error, ε")
+		leps = QLabel("Numerical Integration Error, ε")
 		self.le_eps = QLineEdit()
 		self.le_eps.setValidator(QDoubleValidator(1e-300,1e300,100))
 		lthreads = QLabel('Number of MCMC Threads')
@@ -136,7 +136,7 @@ class prefs(QWidget):
 
 
 	def save_log(self):
-		print self.parent().parent().log.format()
+		print(self.parent().parent().log.format())
 		oname = QFileDialog.getSaveFileName(self,"Save Log file",'./','*.txt')
 		try:
 			if not oname[0]:
@@ -153,7 +153,7 @@ class prefs(QWidget):
 			p = self.parent().parent().prefs
 			sb.showMessage('Testing Speed...')
 			time = b.likelihood.test_speed(p.speed_n,p.speed_d)
-			sout = str(time)+u' μsec/datapoint'
+			sout = str(time)+' μsec/datapoint'
 			self.lavg.setText(sout)
 			self.parent().parent().log.new('Speed Test - '
 				+ b.likelihood.ll_version
@@ -196,7 +196,7 @@ class prefs(QWidget):
 			QMessageBox.critical(self,"Can't Find %s Library"%(failure),
 				"Can't find or load the %s library."%(failure) +
 				"Check that it is compiled.")
-		for i,t in zip(range(3),['Python','C','CUDA']):
+		for i,t in zip(list(range(3)),['Python','C','CUDA']):
 			if b.likelihood.ll_version == t:
 				self.rbs[i].setChecked(True)
 

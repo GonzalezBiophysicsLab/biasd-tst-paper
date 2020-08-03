@@ -1,6 +1,5 @@
 """
 .. module:: laplace
-
 	:synopsis: Contains function to calculate the laplace approximation to the BIASD posterior probability distribution.
 
 """
@@ -16,8 +15,8 @@ def calc_hessian(fxn,x,eps = np.sqrt(np.finfo(np.float64).eps)):
 
 	Finite difference formulas given in Abramowitz & Stegun
 
-		- Eqn. 25.3.23 (on-diagonal)
-		- Eqn. 25.3.26 (off-diagonal)
+		- Eqn. 25.3.24 (on-diagonal)
+		- Eqn. 25.3.27 (off-diagonal)
 
 	Input:
 		* `fxn` is a function that can be evaluated at x
@@ -48,37 +47,47 @@ def calc_hessian(fxn,x,eps = np.sqrt(np.finfo(np.float64).eps)):
 				if i == j:
 					x10 = x.copy()
 					xm10 = x.copy()
+					x20 = x.copy()
+					xm20 = x.copy()
 
 					x10[i] += eps
 					xm10[i] -= eps
+					x20[i] += 2*eps
+					xm20[i] -= 2*eps
 
 					y10 = fxn(x10)
 					ym10 = fxn(xm10)
+					y20 = fxn(x20)
+					ym20 = fxn(xm20)
 
-					h[i,j] = eps**(-2.) * (y10 - 2.*y00 + ym10)
+					h[i,j] = eps**(-2.)/12. * (-y20 + 16.* y10 - 30.*y00 +16.*ym10 - ym20)
 
 				#Off-diagonals above the diagonal
 				elif j > i:
+					x10 = x.copy()
+					xm10 = x.copy()
+					x01 = x.copy()
+					x0m1 = x.copy()
 					x11 = x.copy()
-					x1m1 = x.copy()
 					xm1m1 = x.copy()
-					xm11 = x.copy()
 
+					x10[i] += eps
+					xm10[i] -= eps
+					x01[j] += eps
+					x0m1[j] -= eps
 					x11[i] += eps
 					x11[j] += eps
-					x1m1[i] += eps
-					x1m1[j] -= eps
 					xm1m1[i] -= eps
 					xm1m1[j] -= eps
-					xm11[i] -= eps
-					xm11[j] += eps
 
+					y10 = fxn(x10)
+					ym10 = fxn(xm10)
+					y01 = fxn(x01)
+					y0m1 = fxn(x0m1)
 					y11 = fxn(x11)
-					y1m1 = fxn(x1m1)
 					ym1m1 = fxn(xm1m1)
-					ym11 = fxn(xm11)
 
-					h[i,j] = 1./(4.*eps**2.) * (y11 - y1m1 - ym11 + ym1m1)
+					h[i,j] = -1./(2.*eps**2.) * (y10 + ym10 + y01 + y0m1 - 2.*y00 - y11 - ym1m1)
 	return h
 
 class _laplace_posterior:
@@ -104,7 +113,7 @@ def _min_fxn(theta,data,prior,tau,device):
 	return -1.*log_posterior(theta,data,prior,tau,device)
 def _minimizer(inputt):
 	data,prior,tau,x0,meth,device = inputt
-	mind =  minimize(_min_fxn,x0,method=meth,args=(data,prior,tau,device))
+	mind =  minimize(_min_fxn,x0,method=meth,args=(data,prior,tau,device), tol = np.sqrt(np.finfo(np.float).eps))
 	return mind
 
 def find_map(data,prior,tau,meth='nelder-mead',xx=None,nrestarts=2,threads=1,device=0):
@@ -133,13 +142,21 @@ def find_map(data,prior,tau,meth='nelder-mead',xx=None,nrestarts=2,threads=1,dev
 		xx = [xx]
 	xx.extend([prior.rvs(1).flatten() for _ in range(nrestarts-1)])
 
+
+	for i in np.arange(len(xx)):
+		if xx[i][0] > xx[i][1]:
+			#print xx[i]
+			temp = xx[i][0].copy()
+			xx[i][0] = xx[i][1].copy()
+			xx[i][1] = temp
+
 	if threads > 1:
 		import multiprocessing as mp
 		p = mp.Pool(threads)
 		ylist = p.map(_minimizer,[[data,prior,tau,xx[i],meth,device] for i in range(nrestarts)])
 		p.close()
 	else:
-		ylist =   map(_minimizer,[[data,prior,tau,xx[i],meth,device] for i in range(nrestarts)])
+		ylist =   list(map(_minimizer,[[data,prior,tau,xx[i],meth,device] for i in range(nrestarts)]))
 
 	#Select the best MAP estimate
 	ymin = np.inf
@@ -177,40 +194,54 @@ def laplace_approximation(data,prior,tau,nrestarts=2,verbose=False,threads=1,dev
 	mind = find_map(data,prior,tau,nrestarts=nrestarts,threads=threads,device=device)
 	t1 = time.time()
 	if verbose:
-		print t1-t0
+		print(t1-t0)
 
 	if not mind is None:
 		#Calculate the Hessian at MAP estimate
 		if mind['success']:
 			mu = mind['x']
 			feps = np.sqrt(np.finfo(np.float).eps)
+			feps *= 8. ## The interval is typically too small
 			t0 = time.time()
 			hessian = calc_hessian(lambda theta: log_posterior(theta,data,prior,tau), mu,eps=feps)
+			print(hessian)
 			t1 = time.time()
 			if verbose:
-				print t1-t0
+				print(t1-t0)
+
 			#Ensure that the hessian is positive semi-definite by checking that all eigenvalues are positive
 			#If not, expand the value of machine error in the hessian calculation and try again
 			try:
-				#Check eigenvalues
-				while np.any(np.linalg.eig(-hessian)[0] <= 0.):
-					feps *= 2.
-					#Calculate hessian
-					t0 = time.time()
-					hessian = calc_hessian(lambda theta: log_posterior(theta,data,prior,tau), mu,eps=feps)
-					t1 = time.time()
-					if verbose:
-						print t1-t0
-				#Invert hessian to get the covariance matrix
-				var = np.linalg.inv(-hessian)
+				#Check eigenvalues, use pseudoinverse if ill-conditioned
+				var = -np.linalg.inv(hessian)
+
+				#Ensuring Hessian(variance) is stable
+				new_feps = feps*2.
+				new_hess = calc_hessian(lambda theta: log_posterior(theta,data,prior,tau), mu,eps= new_feps)
+				new_var = -np.linalg.inv(new_hess)
+				it = 0
+
+				while np.any(np.abs(new_var-var)/var > 1e-2):
+					new_feps *= 2
+					var = new_var.copy()
+					new_hess = calc_hessian(lambda theta: log_posterior(theta,data,prior,tau), mu,eps= new_feps)
+					new_var = -np.linalg.inv(new_hess)
+					it +=1
+					# 2^26 times feps = 1. Arbitrary upper-limit, increase if necessary (probably not for BIASD)
+					if it > 25:
+						raise ValueError('Whelp, you hit the end there. bud')
+				# print('Hessian iterations')
+				# print(np.log2(new_feps/feps), it)
+
 				#Ensure symmetry of covariance matrix if witin machine error
 				if np.allclose(var,var.T):
-					var = np.tri(5,5,-1)*var+(np.tri(5,5)*var).T
+					n = var.shape[0]
+					var = np.tri(n,n,-1)*var+(np.tri(n,n)*var).T
 					return _laplace_posterior(mu,var)
 
 			#If this didn't work, return None
 			except np.linalg.LinAlgError:
 				raise ValueError("Wasn't able to calculate the Hessian")
-				pass
+
 	raise ValueError("No MAP estimate")
 	return _laplace_posterior(None,None)

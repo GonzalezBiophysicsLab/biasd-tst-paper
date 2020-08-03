@@ -44,7 +44,7 @@ def convert(input_filename):
 
 	## Transfer Data
 	for i in range(nmol):
-		print 'Converting ',i
+		print('Converting ',i)
 		## Collect Data
 		dd = d['data'][0,i]
 		names = list(dd.dtype.names)

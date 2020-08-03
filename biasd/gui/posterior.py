@@ -16,7 +16,7 @@ import sys
 import biasd as b
 import numpy as np
 
-from smd_loader import ui_loader
+from .smd_loader import ui_loader
 
 class posterior(QWidget):
 	def __init__(self,parent):
@@ -72,7 +72,7 @@ class posterior(QWidget):
 		fn = self.get_smd_filename()
 		f = b.smd.load(fn)
 		g = f[self.ploc]
-		if g.attrs.keys().count('description') > 0:
+		if list(g.attrs.keys()).count('description') > 0:
 			if g.attrs['description'] == "BIASD MCMC result":
 				r = b.smd.read.mcmc(g)
 				f.close()
@@ -88,7 +88,7 @@ class posterior(QWidget):
 				s = np.random.multivariate_normal(r.mu,r.covar,size=10000)
 				self.new_corner(s)
 				return
-		print 'This is not a posterior...'
+		print('This is not a posterior...')
 	
 	def new_corner(self,s):
 		try:

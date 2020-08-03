@@ -1,5 +1,5 @@
 """
-.. module:: likelihood
+... module:: likelihood
 
 	:synopsis: Contains functions to calculate the likelihood function for BIASD
 
@@ -9,11 +9,21 @@ import ctypes as _ctypes
 from sys import platform as _platform
 import os as _os
 import numpy as _np
+from functools import reduce
 _np.seterr(all="ignore")
 _lib_path = _os.path.dirname(_os.path.abspath(__file__)) + "/lib/"
 
+cppd = _ctypes.POINTER(_ctypes.POINTER(_ctypes.c_double))
+
 # Relative error for numerical integration
 _eps = 1e-10
+
+_cuda_d_pointer = None
+_cuda_ll_pointer = None
+data_size = []
+_cuda_d_pointer_glob = []
+_cuda_ll_pointer_glob = []
+
 
 ###########
 ### The C functions are for the log-likelihood of N datapoints.
@@ -33,14 +43,17 @@ _eps = 1e-10
 ##########
 
 #Try to load CUDA log-likelihood .so
-try:
+#try:
+if True:
 	_sopath = _lib_path + 'biasd_cuda'
 	_lib_cuda = _np.ctypeslib.load_library(_sopath, '.') ## future-self: the library has to end in .so ....
 
 	_lib_cuda.log_likelihood.argtypes = [
 		_ctypes.c_int,
 		_ctypes.c_int,
-		_np.ctypeslib.ndpointer(dtype = _np.double),
+		# _ctypes.POINTER(_ctypes.c_void_p),
+		cppd,
+		cppd,
 		_ctypes.c_double,
 		_ctypes.c_double,
 		_ctypes.c_double,
@@ -55,7 +68,9 @@ try:
 	_lib_cuda.sum_log_likelihood.argtypes = [
 		_ctypes.c_int,
 		_ctypes.c_int,
-		_np.ctypeslib.ndpointer(dtype = _np.double),
+		# _ctypes.POINTER(_ctypes.c_void_p),
+		cppd,
+		cppd,
 		_ctypes.c_double,
 		_ctypes.c_double,
 		_ctypes.c_double,
@@ -67,10 +82,27 @@ try:
 #	_lib_cuda.log_likelihood.restype  = _ctypes.POINTER(_ctypes.c_double)
 	_lib_cuda.sum_log_likelihood.restype  = _ctypes.c_double
 
-	print "Loaded CUDA Library:\n"+_sopath+".so"
+	# _lib_cuda.device_count.argtypes = [_ctypes.c_void_p]
+	# _lib_cuda.device_count.restype = _ctypes.c_int
+	# _lib_cuda.cuda_errors.argtypes = [_ctypes.c_int]
+	# _lib_cuda.cuda_errors.restype = _ctypes.c_int
+	#
+	_lib_cuda.load_data.argtypes = [_ctypes.c_int,_ctypes.c_int,_np.ctypeslib.ndpointer(dtype = _np.double),cppd,cppd]
+	_lib_cuda.load_data.restype = _ctypes.c_void_p
+
+	_lib_cuda.free_data.argtypes = [cppd,cppd]
+	_lib_cuda.free_data.restype = _ctypes.c_void_p
+
+	_lib_cuda.test_data.argtypes = [_ctypes.c_int,cppd]
+	_lib_cuda.test_data.restype = _ctypes.c_double
+
+	print("Loaded CUDA Library:\n"+_sopath+".so")
 	_flag_cuda = True
-except:
-	_flag_cuda = False
+#except:
+else:
+ 	_flag_cuda = False
+
+_flag_cuda_glob = _flag_cuda
 
 
 ### Try to load C log-likelihood .so
@@ -106,7 +138,7 @@ try:
 		_ctypes.c_double ]
 	_lib_c.sum_log_likelihood.restype  = _ctypes.c_double
 
-	print "Loaded .C Library:\n"+_sopath+".so"
+	print("Loaded .C Library:\n"+_sopath+".so")
 	_flag_c = True
 except:
 	_flag_c = False
@@ -119,25 +151,59 @@ if _flag_cuda:
 
 		CUDA Version
 		"""
-		global _eps
+		global _eps,_cuda_d_pointer,_cuda_ll_pointer
+
 		epsilon = _eps
 		e1,e2,sigma,k1,k2 = theta
+		device = _lib_cuda.device_count() - 1
 		if not isinstance(data,_np.ndarray):
 			data = _np.array(data,dtype='double')
-		return _lib_cuda.sum_log_likelihood(device,data.size, data, e1, e2, sigma, sigma, k1, k2, tau,epsilon)
+
+		if _cuda_d_pointer is None or _cuda_ll_pointer is None:
+			_cuda_d_pointer = _ctypes.pointer(_ctypes.pointer(_ctypes.c_double()))
+			_cuda_ll_pointer = _ctypes.pointer(_ctypes.pointer(_ctypes.c_double()))
+			#print("pre load python",_ctypes.addressof(_cuda_d_pointer),_cuda_d_pointer.contents,_ctypes.addressof(_cuda_ll_pointer),_cuda_ll_pointer.contents)
+			_lib_cuda.load_data(device,data.size,data,_cuda_d_pointer,_cuda_ll_pointer)
+			#print("post load python",_ctypes.addressof(_cuda_d_pointer),_cuda_d_pointer.contents,_ctypes.addressof(_cuda_ll_pointer),_cuda_ll_pointer.contents)
+
+		y = _lib_cuda.sum_log_likelihood(device,data.size, _cuda_d_pointer, _cuda_ll_pointer, e1, e2, sigma, sigma, k1, k2, tau,epsilon)
+		#print("post call python",_ctypes.addressof(_cuda_d_pointer),_cuda_d_pointer.contents,_ctypes.addressof(_cuda_ll_pointer),_cuda_ll_pointer.contents)
+		# if device >= 0:
+		# 	if _lib_cuda.cuda_errors(device) == 1:
+		# 		raise Exception('Cuda Error: Check Cuda code')
+		return y
 #		llp = _lib_cuda.log_likelihood(data.size, data, e1, e2, sigma, k1, k2, tau,epsilon)
 #		return _np.ctypeslib.as_array(llp,shape=data.shape)
 
 	def _nosum_log_likelihood_cuda(theta,data,tau,device=0):
-		global _eps
+		global _eps,_cuda_d_pointer,_cuda_ll_pointer
 		epsilon = _eps
 		e1,e2,sigma,k1,k2 = theta
+		device = _lib_cuda.device_count() - 1
 		if not isinstance(data,_np.ndarray):
 			data = _np.array(data,dtype='double')
+
+		if _cuda_d_pointer is None or _cuda_ll_pointer is None:
+			_cuda_d_pointer = _ctypes.pointer(_ctypes.pointer(_ctypes.c_double()))
+			_cuda_ll_pointer = _ctypes.pointer(_ctypes.pointer(_ctypes.c_double()))
+			_lib_cuda.load_data(device,data.size,data,_cuda_d_pointer,_cuda_ll_pointer)
+
 		ll = _np.empty_like(data)
-		_lib_cuda.log_likelihood(device,data.size, data, e1, e2, sigma, sigma, k1, k2, tau,epsilon,ll)
+		_lib_cuda.log_likelihood(device,data.size, _cuda_d_pointer, _cuda_ll_pointer, e1, e2, sigma, sigma, k1, k2, tau,epsilon,ll)
+		# if device >= 0:
+		# 	if _lib_cuda.cuda_errors(device) == 1:
+		# 		raise Exception('Cuda Error: Check Cuda code')
 		return ll
 
+	def free_cuda():
+		global _cuda_d_pointer,_cuda_ll_pointer
+		_lib_cuda.free_data(_cuda_d_pointer,_cuda_ll_pointer)
+		_cuda_d_pointer = None
+		_cuda_ll_pointer = None
+
+	def test_data(n=10):
+		global _cuda_d_pointer
+		print(_lib_cuda.test_data(n,_cuda_d_pointer))
 
 	def use_cuda_ll():
 		global log_likelihood
@@ -147,6 +213,62 @@ if _flag_cuda:
 		log_likelihood = _log_likelihood_cuda
 		nosum_log_likelihood = _nosum_log_likelihood_cuda
 
+if _flag_cuda_glob:
+	def _log_likelihood_cuda_glob(theta,index,tau,device=0):
+		global _eps,_cuda_d_pointer_glob,_cuda_ll_pointer_glob
+		global data_size
+
+		epsilon = _eps
+		e1,e2,sigma,k1,k2 = theta
+		device = _lib_cuda.device_count() - 1
+
+		y = _lib_cuda.sum_log_likelihood(device,data_size[index], _cuda_d_pointer_glob[index], _cuda_ll_pointer_glob[index], e1, e2, sigma, sigma, k1, k2, tau,epsilon)
+
+		return y
+
+	def _nosum_log_likelihood_cuda_glob(theta,index,tau,device=0):
+		global _eps,_cuda_d_pointer_glob,_cuda_ll_pointer_glob
+		global data_size
+		epsilon = _eps
+		e1,e2,sigma,k1,k2 = theta
+		device = _lib_cuda.device_count() - 1
+
+		ll = _np.empty(data_size[index], dtype='double')
+		_lib_cuda.log_likelihood(device,data_size[index], _cuda_d_pointer_glob[index], _cuda_ll_pointer_glob[index], e1, e2, sigma, sigma, k1, k2, tau,epsilon,ll)
+
+		return ll
+
+	def load_cuda_glob(data, device = 0):
+		global _cuda_d_pointer_glob,_cuda_ll_pointer_glob
+		global data_size
+
+		_cuda_d_pointer_glob = []
+		_cuda_ll_pointer_glob = []
+		data_size = []
+
+		for i in range(len(data)):
+			_cuda_d_pointer_glob.append(_ctypes.pointer(_ctypes.pointer(_ctypes.c_double())))
+			_cuda_ll_pointer_glob.append(_ctypes.pointer(_ctypes.pointer(_ctypes.c_double())))
+			_lib_cuda.load_data(device,data[i].size,data[i],_cuda_d_pointer_glob[i],_cuda_ll_pointer_glob[i])
+			data_size.append(data[i].size)
+
+
+	def free_cuda_glob():
+		global _cuda_d_pointer_glob,_cuda_ll_pointer_glob
+
+		for i in range(len(_cuda_d_pointer_glob)):
+			_lib_cuda.free_data(_cuda_d_pointer_glob[i],_cuda_ll_pointer_glob[i])
+
+		_cuda_d_pointer_glob = []
+		_cuda_ll_pointer_glob = []
+
+	def use_cuda_glob_ll():
+		global log_likelihood
+		global ll_version
+		global nosum_log_likelihood
+		ll_version = "CUDA (Global)"
+		log_likelihood = _log_likelihood_cuda_glob
+		nosum_log_likelihood = _nosum_log_likelihood_cuda_glob
 
 if _flag_c:
 	def _log_likelihood_c(theta,data,tau,device=None):
@@ -166,6 +288,7 @@ if _flag_c:
 		e1,e2,sigma,k1,k2 = theta
 		if not isinstance(data,_np.ndarray):
 			data = _np.array(data,dtype='double')
+		#print('c')
 		return _lib_c.sum_log_likelihood(data.size, data, e1, e2, sigma, sigma, k1, k2, tau,epsilon)
 #		llp = _lib_c.log_likelihood(data.size, data, e1, e2, sigma, k1, k2, tau,epsilon)
 #		return _np.ctypeslib.as_array(llp,shape=data.shape)
@@ -239,6 +362,7 @@ def _nosum_log_likelihood_python(theta,data,tau,device=None):
 	return _np.log(out)
 
 def _log_likelihood_python(theta,data,tau,device=None):
+	#print('py')
 	return _np.nansum(_nosum_log_likelihood_python(theta,data,tau))
 
 def use_python_ll():
@@ -247,8 +371,8 @@ def use_python_ll():
 	global ll_version
 	ll_version = "Python"
 	try:
-		from src import log_likelihood as numba_ll
-		from src import sum_log_likelihood as numba_sum_ll
+		from .src import log_likelihood as numba_ll
+		from .src import sum_log_likelihood as numba_sum_ll
 		log_likelihood = numba_sum_ll
 		nosum_log_likelihood = numba_ll
 		ll_version = 'Python - Numba'
@@ -271,12 +395,14 @@ def test_speed(n,dpoints = 5000,device=0):
 	from time import time
 	d = _np.linspace(-.2,1.2,dpoints)
 	t0 = time()
+	y = 0
 	for i in range(n):
 		# quad(integrand,0.,1.,args=(.1,0.,1.,.05,3.,8.,.1))[0]
 		y = log_likelihood(_np.array([0.,1.,.05,3.,8.]),d,.1,device=device)
+	print(y)
 	t1 = time()
-	print "Total time for "+str(n)+" runs: ",_np.around(t1-t0,4)," (s)"
-	print 'Average speed: ', _np.around((t1-t0)/n/d.size*1.e6,4),' (usec/datapoint)'
+	print("Total time for "+str(n)+" runs: ",_np.around(t1-t0,4)," (s)")
+	print('Average speed: ', _np.around((t1-t0)/n/d.size*1.e6,4),' (usec/datapoint)')
 	return _np.around((t1-t0)/n/d.size*1.e6,4)
 
 
@@ -284,13 +410,13 @@ def test_speed(n,dpoints = 5000,device=0):
 log_likelihood = _log_likelihood_python
 nosum_log_likelihood = _nosum_log_likelihood_python
 if _flag_cuda:
-	print "Using CUDA log-likelihood"
+	print("Using CUDA log-likelihood")
 	use_cuda_ll()
 elif _flag_c:
-	print "Using C log-likelihood"
+	print("Using C log-likelihood")
 	use_c_ll()
 else:
-	print "Defaulted to native Python log-likelihood"
+	print("Defaulted to native Python log-likelihood")
 
 
 #def mixture_log_likelihood(theta,data,tau):
@@ -348,6 +474,163 @@ else:
 #			return -_np.inf
 #		else:
 #			return y
+
+def bi_mix_log_posterior(theta, data, theta_priors, population_prior, tau, device = 0):
+	if _np.any(theta < -0.05):
+		return - _np.inf
+	#u = [0,1,5,6,10]
+	u = [0,1]
+	if _np.any(theta[u] > 1.05):
+		return - _np.inf
+
+	#thetas = theta[3:5].reshape((2,1))
+
+	if theta[0]>theta[1]:
+		return - _np.inf
+	#hard_c = _np.array([[0.13622,0.81355], [0.13622,0.81355]])
+
+	#com = _np.array([theta[:3], theta[:3]])
+	#com2 = _np.array([[theta[5]], [theta[5]]])
+
+	#thetas = _np.concatenate((com, thetas, com2), axis = 1)
+	q1 = theta[5:]
+	qs = _np.append(q1, 1. - q1.sum())
+
+	thetas = _np.array([theta[:5], theta[:5]])
+
+	lnprior = 0
+
+	for i in range(1):
+		lnprior += theta_priors[i].lnpdf(thetas[i])
+		#print "theta" , theta_priors[i].lnpdf(thetas[i])
+
+	lnprior += population_prior.lnpdf(q1)
+	#print "lnprior", lnprior
+	#print "pop_prior", population_prior.lnpdf(q1)
+	if _np.isnan(lnprior):
+		return -_np.inf
+	elif not _np.isfinite(lnprior):
+		return -_np.inf
+	else:
+		lls = _np.empty((1,data.size))
+
+		for i in range(1):
+			lls[i] = nosum_log_likelihood(thetas[i],data,tau)
+		#print lls
+		ll = _np.sum(_np.log(_np.sum(qs[:1,None]*_np.exp(lls),axis=0) + qs[1]/3))
+		y = lnprior + ll
+		#print y
+		if _np.isnan(y):
+			return -_np.inf
+		else:
+			return y
+
+def mixture_log_posterior2(theta, data, theta_priors, population_prior, taus, device = 0):
+	if _np.any(theta < -0.05):
+		return - _np.inf
+
+	u = [0,1]
+	if _np.any(theta[u] > 1.05):
+		return - _np.inf
+	if theta[0]>theta[1]:
+		return - _np.inf
+
+	thetas33 = theta[4:8].reshape((2,2))
+	thetas50 = thetas33.copy()
+
+	temp33 = _np.array([theta[:3], theta[:3]])
+	thetas33 = _np.concatenate((temp33, thetas33), axis = 1)
+
+	temp50_1 = _np.array([theta[:2], theta[:2]])
+	#print(temp50_1.shape)
+	temp50_2 = _np.array([theta[3], theta[3]]).reshape(2,1)
+	#print(temp50_2.shape)
+	thetas50 = _np.concatenate((temp50_1, temp50_2, thetas50), axis = 1)
+
+	q1_33 = theta[8]
+	q1_50 = theta[9]
+	qs_33 = _np.append(q1_33, 1. - q1_33)
+	qs_50 = _np.append(q1_50, 1. - q1_50)
+
+	lnprior = 0
+
+	n = 2
+	for i in range(2):
+		lnprior += theta_priors[i].lnpdf(thetas33[i])
+		lnprior += theta_priors[i].lnpdf(thetas50[i])
+
+	lnprior += population_prior.lnpdf(q1_33)
+	lnprior += population_prior.lnpdf(q1_50)
+	#print "lnprior", lnprior
+	#print "pop_prior", population_prior.lnpdf(q1)
+	if _np.isnan(lnprior):
+		return -_np.inf
+	elif not _np.isfinite(lnprior):
+		return -_np.inf
+	else:
+		lls_33 = _np.empty((n,data[0].size))
+		lls_50 = _np.empty((n,data[1].size))
+
+		for i in range(2):
+			lls_33[i] = nosum_log_likelihood(thetas33[i],data[0],taus[0])
+			lls_50[i] = nosum_log_likelihood(thetas50[i],data[1],taus[1])
+		#print lls
+		ll = _np.sum(_np.log(_np.sum(qs_33[:,None]*_np.exp(lls_33),axis=0)))
+		ll += _np.sum(_np.log(_np.sum(qs_50[:,None]*_np.exp(lls_50),axis=0)))
+		y = lnprior + ll
+		#print y
+		if _np.isnan(y):
+			return -_np.inf
+		else:
+			return y
+
+def log_global_posterior(theta, data, T, theta_prior, E_priors, tau, device=0):
+	#global _cuda_d_pointer_glob, _cuda_ll_pointer_glob, data_size
+	thetas = theta[:3]
+
+	if thetas[0] > thetas[1]:
+		return -_np.inf
+
+	H1, S1, H2, S2 = theta[3:]
+
+	kappa = 1
+	kB = 1.38064852e-23
+	h = 6.62607004e-34
+	R = 8.314
+
+	temp1 = _np.log(kappa*kB*T/h) + S1/R - H1/(R*T)
+	k1 = _np.exp(temp1)
+
+	temp2 = _np.log(kappa*kB*T/h) + S2/R - H2/(R*T)
+	k2 = _np.exp(temp2)
+
+	lnprior = 0
+
+	for i in range(4):
+		lnprior += E_priors[i].lnpdf(theta[3 + i])
+
+	lnprior += theta_prior.lnpdf(_np.concatenate((thetas, _np.array([0.5, 0.5]))))
+
+	if _np.isnan(lnprior):
+		return -_np.inf
+	elif not _np.isfinite(lnprior):
+		return -_np.inf
+
+	y = lnprior
+
+	for i in range(len(T)):
+		params = _np.concatenate((thetas, _np.array([k1[i], k2[i]])))
+		if ll_version == "CUDA (Global)":
+			y +=  log_likelihood(params,i,tau,device=device)
+		else:
+			y +=  log_likelihood(params,data[i],tau,device=device)
+
+	#print y
+	if _np.isnan(y):
+		return -_np.inf
+	else:
+		return y
+
 
 def log_posterior(theta,data,prior_dists,tau,device=0):
 	"""
@@ -417,5 +700,5 @@ def predictive_from_samples(x,samples,tau,device=0):
 		* `y` a `np.ndarray` the same size as `x` containing the marginalized likelihood function evaluated at x
 	'''
 	n = samples.shape[0]
-	y = reduce(lambda x,y: x+y, [_np.exp(nosum_log_likelihood(samples[i],x,tau,device=device)) for i in xrange(n)])/n
+	y = reduce(lambda x,y: x+y, [_np.exp(nosum_log_likelihood(samples[i],x,tau,device=device)) for i in range(n)])/n
 	return y
