@@ -12,6 +12,7 @@ import numpy as _np
 from functools import reduce
 _np.seterr(all="ignore")
 _lib_path = _os.path.dirname(_os.path.abspath(__file__)) + "/lib/"
+print(_lib_path)
 
 cppd = _ctypes.POINTER(_ctypes.POINTER(_ctypes.c_double))
 
@@ -43,9 +44,9 @@ _cuda_ll_pointer_glob = []
 ##########
 
 #Try to load CUDA log-likelihood .so
-#try:
-if True:
+try:
 	_sopath = _lib_path + 'biasd_cuda'
+	print(_sopath)
 	_lib_cuda = _np.ctypeslib.load_library(_sopath, '.') ## future-self: the library has to end in .so ....
 
 	_lib_cuda.log_likelihood.argtypes = [
@@ -98,8 +99,7 @@ if True:
 
 	print("Loaded CUDA Library:\n"+_sopath+".so")
 	_flag_cuda = True
-#except:
-else:
+except:
  	_flag_cuda = False
 
 _flag_cuda_glob = _flag_cuda
@@ -397,7 +397,6 @@ def test_speed(n,dpoints = 5000,device=0):
 	t0 = time()
 	y = 0
 	for i in range(n):
-		# quad(integrand,0.,1.,args=(.1,0.,1.,.05,3.,8.,.1))[0]
 		y = log_likelihood(_np.array([0.,1.,.05,3.,8.]),d,.1,device=device)
 	print(y)
 	t1 = time()
@@ -417,172 +416,9 @@ elif _flag_c:
 	use_c_ll()
 else:
 	print("Defaulted to native Python log-likelihood")
+	use_python_ll()
 
 
-#def mixture_log_likelihood(theta,data,tau):
-#	n = (theta.size+1)/6
-#	thetas = theta[:5*n].reshape((n,5))
-#	qs = theta[5*n:]
-#	qs = _np.append(qs,1.-qs.sum())
-#
-#	lls = _np.empty((n,data.size))
-#	for i in range(n):
-#		lls[i] = log_likelihood(thetas[i],data,tau)
-#	ll = _np.log(_np.sum(qs[:,None]*_np.exp(lls),axis=0))
-#	return ll
-#
-
-
-#def mixture_log_posterior(theta,data,theta_priors,population_prior,tau):
-#	"""
-#	Calculate the log-posterior probability for a mixture of `M` sub-systems at :math:`\\vec{ \\Theta}`
-#
-#	Input:
-#		* `theta` is a vector of BIASD parameters and the population fractions. e.g. :math:`[ \\Theta_1, ..., \\Theta_M, f_1, ..., f_{M-1}`
-#		* `data` is a 1D `np.ndarray` of the time series to analyze
-#		* `theta_priors` is a list of `biasd.distributions.parameter_collection`s containing the prior probability distributions for each sub-system
-#		* `population_prior` is a function that takes a 1D `np.ndarray` vector of length M containing the occupation probability of each of the `M` states, and returns the log probability prior of that point as a float.
-#		* `tau` is the measurement period of `data`
-#
-#	Returns:
-#		* The summed log posterior probability distribution, :math:`p(\\Theta \\vert data) \\propto p(data \\vert \\Theta) \cdot p(\\Theta)`
-#	"""
-
-#	n = (theta.size+1)/6
-
-#	thetas = theta[:5*n].reshape((n,5))
-#	qs = theta[5*n:]
-#	qs = _np.append(qs,1.-qs.sum())
-#
-#
-#	lnprior = 0.
-#	for i in xrange(n):
-#		lnprior += theta_priors[i].lnpdf(thetas[i])
-#	lnprior += population_prior.lnpdf(qs)
-#
-#	if _np.isnan(lnprior):
-#		return -_np.inf
-#	elif not _np.isfinite(lnprior):
-#		return -_np.inf
-#	else:
-#		lls = _np.empty((n,data.size))
-#		for i in range(n):
-#			lls[i] = log_likelihood(thetas[i],data,tau)
-#		ll = _np.sum(_np.log(_np.sum(qs[:,None]*_np.exp(lls),axis=0)))
-#		y = lnprior + ll
-#		if _np.isnan(y):
-#			return -_np.inf
-#		else:
-#			return y
-
-def bi_mix_log_posterior(theta, data, theta_priors, population_prior, tau, device = 0):
-	if _np.any(theta < -0.05):
-		return - _np.inf
-	#u = [0,1,5,6,10]
-	u = [0,1]
-	if _np.any(theta[u] > 1.05):
-		return - _np.inf
-
-	#thetas = theta[3:5].reshape((2,1))
-
-	if theta[0]>theta[1]:
-		return - _np.inf
-	#hard_c = _np.array([[0.13622,0.81355], [0.13622,0.81355]])
-
-	#com = _np.array([theta[:3], theta[:3]])
-	#com2 = _np.array([[theta[5]], [theta[5]]])
-
-	#thetas = _np.concatenate((com, thetas, com2), axis = 1)
-	q1 = theta[5:]
-	qs = _np.append(q1, 1. - q1.sum())
-
-	thetas = _np.array([theta[:5], theta[:5]])
-
-	lnprior = 0
-
-	for i in range(1):
-		lnprior += theta_priors[i].lnpdf(thetas[i])
-		#print "theta" , theta_priors[i].lnpdf(thetas[i])
-
-	lnprior += population_prior.lnpdf(q1)
-	#print "lnprior", lnprior
-	#print "pop_prior", population_prior.lnpdf(q1)
-	if _np.isnan(lnprior):
-		return -_np.inf
-	elif not _np.isfinite(lnprior):
-		return -_np.inf
-	else:
-		lls = _np.empty((1,data.size))
-
-		for i in range(1):
-			lls[i] = nosum_log_likelihood(thetas[i],data,tau)
-		#print lls
-		ll = _np.sum(_np.log(_np.sum(qs[:1,None]*_np.exp(lls),axis=0) + qs[1]/3))
-		y = lnprior + ll
-		#print y
-		if _np.isnan(y):
-			return -_np.inf
-		else:
-			return y
-
-def mixture_log_posterior2(theta, data, theta_priors, population_prior, taus, device = 0):
-	if _np.any(theta < -0.05):
-		return - _np.inf
-
-	u = [0,1]
-	if _np.any(theta[u] > 1.05):
-		return - _np.inf
-	if theta[0]>theta[1]:
-		return - _np.inf
-
-	thetas33 = theta[4:8].reshape((2,2))
-	thetas50 = thetas33.copy()
-
-	temp33 = _np.array([theta[:3], theta[:3]])
-	thetas33 = _np.concatenate((temp33, thetas33), axis = 1)
-
-	temp50_1 = _np.array([theta[:2], theta[:2]])
-	#print(temp50_1.shape)
-	temp50_2 = _np.array([theta[3], theta[3]]).reshape(2,1)
-	#print(temp50_2.shape)
-	thetas50 = _np.concatenate((temp50_1, temp50_2, thetas50), axis = 1)
-
-	q1_33 = theta[8]
-	q1_50 = theta[9]
-	qs_33 = _np.append(q1_33, 1. - q1_33)
-	qs_50 = _np.append(q1_50, 1. - q1_50)
-
-	lnprior = 0
-
-	n = 2
-	for i in range(2):
-		lnprior += theta_priors[i].lnpdf(thetas33[i])
-		lnprior += theta_priors[i].lnpdf(thetas50[i])
-
-	lnprior += population_prior.lnpdf(q1_33)
-	lnprior += population_prior.lnpdf(q1_50)
-	#print "lnprior", lnprior
-	#print "pop_prior", population_prior.lnpdf(q1)
-	if _np.isnan(lnprior):
-		return -_np.inf
-	elif not _np.isfinite(lnprior):
-		return -_np.inf
-	else:
-		lls_33 = _np.empty((n,data[0].size))
-		lls_50 = _np.empty((n,data[1].size))
-
-		for i in range(2):
-			lls_33[i] = nosum_log_likelihood(thetas33[i],data[0],taus[0])
-			lls_50[i] = nosum_log_likelihood(thetas50[i],data[1],taus[1])
-		#print lls
-		ll = _np.sum(_np.log(_np.sum(qs_33[:,None]*_np.exp(lls_33),axis=0)))
-		ll += _np.sum(_np.log(_np.sum(qs_50[:,None]*_np.exp(lls_50),axis=0)))
-		y = lnprior + ll
-		#print y
-		if _np.isnan(y):
-			return -_np.inf
-		else:
-			return y
 
 def log_global_posterior(theta, data, T, theta_prior, E_priors, tau, device=0):
 	#global _cuda_d_pointer_glob, _cuda_ll_pointer_glob, data_size
