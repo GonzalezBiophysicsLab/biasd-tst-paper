@@ -421,19 +421,38 @@ else:
 
 
 def log_global_posterior(theta, data, T, theta_prior, E_priors, tau, device=0):
-	#global _cuda_d_pointer_glob, _cuda_ll_pointer_glob, data_size
+	"""
+	Calculate the global log-posterior probability distribution at :math:`\\Theta`
+
+	Input:
+		* `theta` is a vector of the parameters (i.e., :math:`\\theta`) where to evaluate the log-posterior
+		  in the order: e1, e2, sigma, H1, S1, H2, S2
+		* `data` is a list of 5 1D `np.ndarray`s of the time series at 5 temperature points to analyze
+		* `theta_prior` is a `biasd.distributions.parameter_collection` containing the prior probability
+		  distributions for e1, e2, sigma (along with fake k1 and k2 priors) for the BIASD calculation
+		* `E_priors` is a list of probability distributions drawn from `biasd.distributions` which define
+		  the priors for the activation parameters H1, S1, H2, S2
+		* `tau` is the measurement period of `data`
+
+	Returns:
+		* The summed log posterior probability distribution, :math:`p(\\Theta \\vert data) \\propto p(data \\vert \\Theta) \cdot p(\\Theta)`
+	"""
+
 	thetas = theta[:3]
 
+	# ensures that e1 < e2
 	if thetas[0] > thetas[1]:
 		return -_np.inf
 
 	H1, S1, H2, S2 = theta[3:]
 
+	# the following parameters for the TST equation are in SI units
 	kappa = 1
 	kB = 1.38064852e-23
 	h = 6.62607004e-34
 	R = 8.314
 
+	# recasting the activation parameters into a series of rate constants at different temperatures
 	temp1 = _np.log(kappa*kB*T/h) + S1/R - H1/(R*T)
 	k1 = _np.exp(temp1)
 
@@ -442,9 +461,13 @@ def log_global_posterior(theta, data, T, theta_prior, E_priors, tau, device=0):
 
 	lnprior = 0
 
+	# evaluating the priors for activation parameters
 	for i in range(4):
 		lnprior += E_priors[i].lnpdf(theta[3 + i])
 
+	# evaluating priors for E_fret's and noise. Since the priors for the rate constants have
+	# already been evaluated in terms of activation parameters, two values of rate constants
+	# are hard-coded here, which only add a constant baseline to the prior probability
 	lnprior += theta_prior.lnpdf(_np.concatenate((thetas, _np.array([0.5, 0.5]))))
 
 	if _np.isnan(lnprior):
@@ -461,7 +484,6 @@ def log_global_posterior(theta, data, T, theta_prior, E_priors, tau, device=0):
 		else:
 			y +=  log_likelihood(params,data[i],tau,device=device)
 
-	#print y
 	if _np.isnan(y):
 		return -_np.inf
 	else:

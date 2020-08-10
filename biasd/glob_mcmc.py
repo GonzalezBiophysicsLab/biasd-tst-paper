@@ -1,6 +1,6 @@
 '''
-.. module:: mcmc
-	:synopsis: Integrates emcee's MCMC into BIASD
+.. module:: glob_mcmc
+	:synopsis: Integrates emcee's MCMC into BIASD for global analysis
 
 '''
 
@@ -35,17 +35,17 @@ def setup(data, T, priors, E_priors, tau, nwalkers, initialize='rvs', threads=1,
 
 	if isinstance(initialize,_np.ndarray) and initialize.shape == (nwalkers,7):
 		initial_positions = initialize
-	
+
 	elif initialize == 'rvs':
 
 		H1 = E_priors[0].rvs(nwalkers).flatten()
 		S1 = (H1 - 71400.)/300.
 		H2 = E_priors[2].rvs(nwalkers).flatten()
 		S2 = (H2 - 71400.)/300.
-		
+
 		initial_positions = _np.array([_np.concatenate((priors.rvs(1).flatten()[u], _np.array([H1[i], S1[i], H2[i], S2[i]]))) for i in range(nwalkers)])
 	elif initialize == 'mean':
-		
+
 		H1 = E_priors[0].mean()
 		S1 = (H1 - 71400.)/300.
 		H2 = E_priors[2].mean()
