@@ -428,6 +428,7 @@ def log_global_posterior(theta, data, T, theta_prior, E_priors, tau, device=0):
 		* `theta` is a vector of the parameters (i.e., :math:`\\theta`) where to evaluate the log-posterior
 		  in the order: e1, e2, sigma, H1, S1, H2, S2
 		* `data` is a list of 5 1D `np.ndarray`s of the time series at 5 temperature points to analyze
+		* `T` is a `np.ndarray` of 5 temperature points that `data` corresponds to
 		* `theta_prior` is a `biasd.distributions.parameter_collection` containing the prior probability
 		  distributions for e1, e2, sigma (along with fake k1 and k2 priors) for the BIASD calculation
 		* `E_priors` is a list of probability distributions drawn from `biasd.distributions` which define
@@ -452,7 +453,7 @@ def log_global_posterior(theta, data, T, theta_prior, E_priors, tau, device=0):
 	h = 6.62607004e-34
 	R = 8.314
 
-	# recasting the activation parameters into a series of rate constants at different temperatures
+	# recasting the activation parameters into an array of rate constants at different temperatures
 	temp1 = _np.log(kappa*kB*T/h) + S1/R - H1/(R*T)
 	k1 = _np.exp(temp1)
 
@@ -467,7 +468,8 @@ def log_global_posterior(theta, data, T, theta_prior, E_priors, tau, device=0):
 
 	# evaluating priors for E_fret's and noise. Since the priors for the rate constants have
 	# already been evaluated in terms of activation parameters, two values of rate constants
-	# are hard-coded here, which only add a constant baseline to the prior probability
+	# (which fall in the range given by the fake priors) are hard-coded here, which only add
+	# constant to the posterior probability, and do not change the maximum. 
 	lnprior += theta_prior.lnpdf(_np.concatenate((thetas, _np.array([0.5, 0.5]))))
 
 	if _np.isnan(lnprior):

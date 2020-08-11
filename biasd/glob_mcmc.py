@@ -13,9 +13,13 @@ def setup(data, T, priors, E_priors, tau, nwalkers, initialize='rvs', threads=1,
 	Prepare the MCMC sampler
 
 	Input:
-		* `data` is a `np.ndarray` of the time series
-		* `priors` is a `biasd.distributions.parameter_collection` of the priors
-		* `tau` is the measurement period each data point
+		* `data` is a list of 5 1D `np.ndarray`s of the time series at 5 temperature points to analyze
+		* `T` is a `np.ndarray` of 5 temperature points that `data` corresponds to
+		* `priors` is a `biasd.distributions.parameter_collection` containing the prior probability
+		  distributions for e1, e2, sigma (along with fake k1 and k2 priors) for the BIASD calculation
+		* `E_priors` is a list of probability distributions drawn from `biasd.distributions` which define
+		  the priors for the activation parameters H1, S1, H2, S2
+		* `tau` is the measurement period of `data`
 		* `nwalkers` is the number of walkers in the MCMC ensemble. The more the better
 		* `initialze` =
 			- 'rvs' will initialize the walkers at a random spot chosen from the priors
@@ -27,11 +31,10 @@ def setup(data, T, priors, E_priors, tau, nwalkers, initialize='rvs', threads=1,
 		* An `emcee` sampler object. Please see the `emcee` documentation for more information.
 	"""
 
-	#from biasd.likelihood import log_global_posterior, load_cuda_glob
 	import biasd.likelihood as bl
 
-	ndim = 7
-	u = [0,1,2]
+	ndim = 7		#corresponding to e1, e2, sigma, H1, S1, H2, S2
+	u = [0,1,2] 	#used to ignore k1 and k2 from 'biasd.distributions.parameter_collection' functions
 
 	if isinstance(initialize,_np.ndarray) and initialize.shape == (nwalkers,7):
 		initial_positions = initialize
@@ -39,17 +42,17 @@ def setup(data, T, priors, E_priors, tau, nwalkers, initialize='rvs', threads=1,
 	elif initialize == 'rvs':
 
 		H1 = E_priors[0].rvs(nwalkers).flatten()
-		S1 = (H1 - 71400.)/300.
+		S1 = (H1 - 71400.)/300.		#used to maintain negative correlation between H and S in initial positions
 		H2 = E_priors[2].rvs(nwalkers).flatten()
-		S2 = (H2 - 71400.)/300.
+		S2 = (H2 - 71400.)/300.		#used to maintain negative correlation between H and S in initial positions
 
 		initial_positions = _np.array([_np.concatenate((priors.rvs(1).flatten()[u], _np.array([H1[i], S1[i], H2[i], S2[i]]))) for i in range(nwalkers)])
 	elif initialize == 'mean':
 
 		H1 = E_priors[0].mean()
-		S1 = (H1 - 71400.)/300.
+		S1 = (H1 - 71400.)/300.		#used to maintain negative correlation between H and S in initial positions
 		H2 = E_priors[2].mean()
-		S2 = (H2 - 71400.)/300.
+		S2 = (H2 - 71400.)/300.		#used to maintain negative correlation between H and S in initial positions
 
 		initial_positions = _np.array([_np.concatenate((_np.array([p.mean() for p in priors]).flatten()[u], _np.array([H1,S1,H2,S2])), axis = 0) for _ in range(nwalkers)])
 
@@ -63,6 +66,7 @@ def setup(data, T, priors, E_priors, tau, nwalkers, initialize='rvs', threads=1,
 			initial_positions[i,0] = initial_positions[i,1]
 			initial_positions[i,1] = temp
 
+	# Loading the data on the GPU to make it persistent throughout the calculation
 	if bl.ll_version == "CUDA (Global)":
 		bl.load_cuda_glob(data)
 
@@ -140,6 +144,7 @@ def get_samples(sampler,nwalkers,uncorrelated=True,culled=False):
 
 	Input:
 		* `sampler` is an `emcee` sampler with samples in it
+		* `nwalker` is an integer containing the number of walkers used in `sampler`
 		* `uncorrelated` is a boolean for whether to provide all the samples, or every n'th sample, where n is the larges autocorrelation time of the dimensions.
 		* `culled` is a boolean, where any sample with a log-probability less than 0 is removed. This is necessary because sometimes a few chains get very stuck, and their samples (not being representative of the posterior) mess up subsequent plots.
 
@@ -163,69 +168,71 @@ def get_samples(sampler,nwalkers,uncorrelated=True,culled=False):
 	samples = sampler.chain[~cut,::maxauto,:].reshape((-1,7))
 	return samples
 
-def plot_corner(samples):
-	"""
-	Use the python package called corner <https://github.com/dfm/corner.py> to make some very nice corner plots (joints and marginalized) of posterior in the 5-dimensions used by the two-state BIASD posterior.
+""" Not available yet for glob_mcmc """
 
-	Input:
-		* `samples` is a (N,7) `np.ndarray`
-	Returns:
-		* `fig` which is the handle to the figure containing the corner plot
-	"""
+#def plot_corner(samples):
+#	"""
+#	Use the python package called corner <https://github.com/dfm/corner.py> to make some very nice corner plots (joints and marginalized) of posterior in the 5-dimensions used by the two-state BIASD posterior.
+#
+#	Input:
+#		* `samples` is a (N,7) `np.ndarray`
+#	Returns:
+#		* `fig` which is the handle to the figure containing the corner plot
+#	"""
+#
+#	import corner
+#	labels = [r'$\epsilon_1$', r'$\epsilon_2$', r'$\sigma_1$', r'$k_1$', r'$k_2$', r'$\varepsilon_1$', r'$\varepsilon_2$', r'$\sigma_1$', r'$kp_1$', r'$kp_2$',r'$q$']
+#	fig = corner.corner(samples, labels=labels, quantiles=[.025,.50,.975],levels=(1-_np.exp(-0.5),))
+#	return fig
 
-	import corner
-	labels = [r'$\epsilon_1$', r'$\epsilon_2$', r'$\sigma_1$', r'$k_1$', r'$k_2$', r'$\varepsilon_1$', r'$\varepsilon_2$', r'$\sigma_1$', r'$kp_1$', r'$kp_2$',r'$q$']
-	fig = corner.corner(samples, labels=labels, quantiles=[.025,.50,.975],levels=(1-_np.exp(-0.5),))
-	return fig
+#def create_posterior_collection(samples,priors):
+#	"""
+#	Take the MCMC samples, marginalize them, and then calculate the first and second moments. Use these to moment-match to the types of distributions specified for each dimension in the priors. For instance, if the prior for :math:`\\epsilon_1` was beta distributed, this will moment-match the posterior to as a beta distribution.
+#
+#	Input:
+#		* `samples` is a (N,5) `np.ndarray`
+#		* `priors` is a `biasd.distributions.parameter_collection` that provides the distribution-forms to moment-match to
+#	Returns:
+#		* A `biasd.distributions.parameter_collection` containing the marginalized, moment-matched posteriors
+#	"""
+#
+#	from biasd.distributions import parameter_collection
+#	#Moment-match, marginalized posteriors
+#	first = samples.mean(0)
+#	second = _np.var(samples,axis=0)+first**2
+#
+#	e1 = priors.e1.new(_np.around(priors.e1._moment2param_fxn(first[0], second[0]),4))
+#	e2 = priors.e2.new(_np.around(priors.e2._moment2param_fxn(first[1], second[1]),4))
+#	sigma = priors.sigma.new(_np.around(priors.sigma._moment2param_fxn(first[2], second[2]),4))
+#	k1 = priors.k1.new(_np.around(priors.k1._moment2param_fxn(first[3], second[3]),4))
+#	k2 = priors.k2.new(_np.around(priors.k2._moment2param_fxn(first[4], second[4]),4))
+#
+#	return parameter_collection(e1,e2,sigma,k1,k2)
 
-def create_posterior_collection(samples,priors):
-	"""
-	Take the MCMC samples, marginalize them, and then calculate the first and second moments. Use these to moment-match to the types of distributions specified for each dimension in the priors. For instance, if the prior for :math:`\\epsilon_1` was beta distributed, this will moment-match the posterior to as a beta distribution.
-
-	Input:
-		* `samples` is a (N,5) `np.ndarray`
-		* `priors` is a `biasd.distributions.parameter_collection` that provides the distribution-forms to moment-match to
-	Returns:
-		* A `biasd.distributions.parameter_collection` containing the marginalized, moment-matched posteriors
-	"""
-
-	from biasd.distributions import parameter_collection
-	#Moment-match, marginalized posteriors
-	first = samples.mean(0)
-	second = _np.var(samples,axis=0)+first**2
-
-	e1 = priors.e1.new(_np.around(priors.e1._moment2param_fxn(first[0], second[0]),4))
-	e2 = priors.e2.new(_np.around(priors.e2._moment2param_fxn(first[1], second[1]),4))
-	sigma = priors.sigma.new(_np.around(priors.sigma._moment2param_fxn(first[2], second[2]),4))
-	k1 = priors.k1.new(_np.around(priors.k1._moment2param_fxn(first[3], second[3]),4))
-	k2 = priors.k2.new(_np.around(priors.k2._moment2param_fxn(first[4], second[4]),4))
-
-	return parameter_collection(e1,e2,sigma,k1,k2)
-
-class mcmc_result(object):
-	"""
-	Holds the results of a MCMC sampler of the posterior probability distribution from BIASD
-	Input:
-		* `mcmc_input` is either an `emcee.sampler.Sampler` or child, or a list of `[acor, chain, lnprobability, iterations, naccepted, nwalkers, dim]`
-	"""
-	def __init__(self, mcmc_input):
-		try:
-			if 'lnprobfn' in mcmc_input.__dict__:
-				if 'acor' not in mcmc_input.__dict__:
-					mcmc_input.get_autocorr_time()
-				self.acor = mcmc_input.acor
-				self.chain = mcmc_input.chain
-				self.lnprobability = mcmc_input.lnprobability
-				self.iterations = mcmc_input.iterations
-				self.naccepted = mcmc_input.naccepted
-				self.nwalkers = mcmc_input.k
-				self.dim = mcmc_input.dim
-				return
-		except:
-			pass
-		try:
-			self.acor, self.chain, self.lnprobability, self.iterations, self.naccepted,self.nwalkers,self.dim = mcmc_input
-			return
-		except:
-			pass
-		raise Exception("Couldn't initialize mcmc_result")
+#class mcmc_result(object):
+#	"""
+#	Holds the results of a MCMC sampler of the posterior probability distribution from BIASD
+#	Input:
+#		* `mcmc_input` is either an `emcee.sampler.Sampler` or child, or a list of `[acor, chain, lnprobability, iterations, naccepted, nwalkers, dim]`
+#	"""
+#	def __init__(self, mcmc_input):
+#		try:
+#			if 'lnprobfn' in mcmc_input.__dict__:
+#				if 'acor' not in mcmc_input.__dict__:
+#					mcmc_input.get_autocorr_time()
+#				self.acor = mcmc_input.acor
+#				self.chain = mcmc_input.chain
+#				self.lnprobability = mcmc_input.lnprobability
+#				self.iterations = mcmc_input.iterations
+#				self.naccepted = mcmc_input.naccepted
+#				self.nwalkers = mcmc_input.k
+#				self.dim = mcmc_input.dim
+#				return
+#		except:
+#			pass
+#		try:
+#			self.acor, self.chain, self.lnprobability, self.iterations, self.naccepted,self.nwalkers,self.dim = mcmc_input
+#			return
+#		except:
+#			pass
+#		raise Exception("Couldn't initialize mcmc_result")
